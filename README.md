@@ -27,4 +27,4 @@ ACE (aceae128v1 & acehash256v1) implementation using LWC Development Package.
 ## Credits
 Thanks to Dr. Kris Gaj and the rest of the GMU CERG group for their help and patience as I completed my first contribution to the team.
 
-PDF documents were generated using NPM package [md-to-pdf](https://www.npmjs.com/package/md-to-pdf) by [Simon Hänisch](https://www.npmjs.com/~simonhaenisch).
+PDF documents derived from markdown files were generated using NPM package [md-to-pdf](https://www.npmjs.com/package/md-to-pdf) by [Simon Hänisch](https://www.npmjs.com/~simonhaenisch).
