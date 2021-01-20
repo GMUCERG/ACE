@@ -17,8 +17,17 @@
 #define KAT_DATA_ERROR      -3
 #define KAT_CRYPTO_FAILURE  -4
 
+/*
+   *rate_bytes: positions of rate bytes in state
+*/
 const unsigned char rate_bytes[8] = {0,1,2,3,16,17,18,19};
 
+/*
+   *ace_init: initialization with key and nonce
+   *k: key 
+   *npub: nonce
+   *state: state after initialization
+*/
 int ace_init(
 		unsigned char *state, 
 		const unsigned char *npub,
@@ -46,12 +55,14 @@ int ace_init(
 			state[32+i] = npub[8+i];
 		
 		ace_permutation(state);
-
+		
+		//Absorbing first 64-bit key
 		for ( i = 0; i < 8; i++ )
 			state[rate_bytes[i]]^=k[i];
 
 		ace_permutation(state);
-
+		
+		//Absorbing last 64-bit key
 		for ( i = 0; i < 8; i++ )
 			state[rate_bytes[i]]^=k[8+i];
 
@@ -64,7 +75,14 @@ int ace_init(
 return KAT_SUCCESS;
 }
 
-
+/*
+   *ace_ad: processing associated data
+   *adlen: byte-length of ad
+   *ad: associated data
+   *state: state after initialization, 
+           and output state is stored 
+	   in "state" (inplace) 
+*/
 int ace_ad(
 			unsigned char *state,
 			const unsigned char *ad, 
@@ -111,6 +129,13 @@ int ace_ad(
 return (KAT_SUCCESS);
 }
 
+/*
+   *ace_gentag: generate tag
+   *k: key
+   *state: state before tag generation
+   *tlen: length of tag in byte
+   *tag: tag
+*/
 int ace_gentag(
                unsigned char *tag,
                const unsigned char tlen,
@@ -121,16 +146,18 @@ int ace_gentag(
         unsigned char i;
         if ( CRYPTO_KEYBYTES == 16 && tlen == 16 )
         {
+				//Absorbing first 64-bit (8 bytes) key
                 for ( i = 0; i < 8; i++ )
                         state[rate_bytes[i]]^=k[i];
                 
                 ace_permutation(state);
                 
+                //Absorbing last 64-bit key
                 for ( i = 0; i < 8; i++ )
                         state[rate_bytes[i]]^=k[8+i];
                 
                 ace_permutation(state);
-                //Extracting 128-bit tag from X1 and X3
+                //Extracting 128-bit tag from A and C
                 for ( i = 0; i < 8; i++ )
                 {
                         tag[i] = state[i];
@@ -145,6 +172,18 @@ int ace_gentag(
         return KAT_SUCCESS;
 }
 
+/*
+   *crypto_aead_encrypt: encrypt message and produce tag
+   *k: key 
+   *npub: nonce
+   *nsec: NULL
+   *adlen: length of ad
+   *ad: associated data
+   *mlen: length of message
+   *m: message to be encrypted
+   *clen: ciphertext length + tag length
+   *c: ciphertext, followed by tag
+*/
 int crypto_aead_encrypt(
 			unsigned char *c,unsigned long long *clen,
 			const unsigned char *m,unsigned long long mlen,
@@ -161,6 +200,7 @@ int crypto_aead_encrypt(
 
 	m64len = mlen/8;
 	lblen = (unsigned char)(mlen%8);
+	nsec=nsec;
 
 	state = (unsigned char *)malloc(sizeof(unsigned char)*STATEBYTES);
 	tag = (unsigned char *)malloc(sizeof(unsigned char)*CRYPTO_ABYTES);
@@ -242,6 +282,18 @@ int crypto_aead_encrypt(
 return KAT_SUCCESS;
 }
 
+/*
+   *crypto_aead_decrypt: decrypt ciphertext and verify tag
+   *k: key 
+   *npub: nonce
+   *nsec: NULL
+   *adlen: length of ad
+   *ad: associated data
+   *clen: ciphertext length + tag length
+   *c: ciphertext, followed by tag
+   *mlen: length of message
+   *m: message
+*/
 int crypto_aead_decrypt(
 			unsigned char *m,unsigned long long *mlen,
 			unsigned char *nsec,
@@ -256,6 +308,7 @@ int crypto_aead_decrypt(
         clen1 = clen-CRYPTO_ABYTES;
         c64len = clen1/8;
 	lblen = (unsigned char)(clen1%8);
+	nsec = nsec;
 	
 	unsigned char *state;
 	unsigned char *tag;

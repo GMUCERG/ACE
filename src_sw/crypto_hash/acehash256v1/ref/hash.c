@@ -17,8 +17,15 @@
 #define KAT_DATA_ERROR      -3
 #define KAT_CRYPTO_FAILURE  -4
 
+/*
+ *rate_bytes: positions of rate bytes in state
+*/
 const unsigned char rate_bytes[8] = {0,1,2,3,16,17,18,19};
 
+/*
+   *acehash_init: initialize with IV
+   *state: output state after initialization
+*/
 int acehash_init( unsigned char *state )
 {
 	unsigned char i;
@@ -42,6 +49,11 @@ int acehash_init( unsigned char *state )
 return KAT_SUCCESS;
 }
 
+/*
+   *crypto_hash: compute hash/message digest on "in"
+   *inlen: input length
+   *in: input
+*/
 int crypto_hash(
 	unsigned char *out,
 	const unsigned char *in,
