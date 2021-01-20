@@ -1,0 +1,5 @@
+sb64_tb.vhd
+ace_step_tb.vhd
+ace_permutation_tb.vhd
+LWC_TB_compatibility_pkg.vhd
+LWC_TB.vhd

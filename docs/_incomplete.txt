@@ -1,0 +1,3 @@
+Assumptions document is incomplete and not yet pushed.
+Variant document is incomplete and not yet pushed.
+Both documents need to be checked against the LWC Development Package guidelines.

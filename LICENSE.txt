@@ -1,0 +1,13 @@
+License:
+GNU GPL v3
+
+Hardware Design Group:
+CERG GMU
+
+Primary Hardware Designers:
+Omar Zabala-Ferrera,https://cryptography.gmu.edu/team/, ozabalaf@gmu.edu
+
+Academic advisors:
+Kris Gaj, https://ece.gmu.edu/~kgaj/, kgaj@gmu.edu
+Jens-Peter Kaps, https://ece.gmu.edu/~jkaps/, jkaps@gmu.edu
+LWC Candidate: ACE

@@ -1,0 +1,2 @@
+# Reference ACE Code
+This code belongs to the original authors of the ACE algorithm. It and other implementations can be found on [their team website](https://uwaterloo.ca/communications-security-lab/lwc/ace).

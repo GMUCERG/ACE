@@ -1,0 +1,2 @@
+# Ignore the backend directory. Contains Vivado project.
+backend
