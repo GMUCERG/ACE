@@ -1,1 +1,0 @@
-KAT file test_vectors.txt has not yet been created.
