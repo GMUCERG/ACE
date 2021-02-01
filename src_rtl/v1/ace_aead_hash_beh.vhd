@@ -77,7 +77,7 @@ ARCHITECTURE behavioral OF CryptoCore IS
 
     EXTRACT_HASH_VAL, -- Output hash value
     EXTRACT_TAG,      -- Output tag value
-    VERIFY_TAG       -- Verify tag matches
+    VERIFY_TAG        -- Verify tag matches
   );
 
   SIGNAL state   : ASM_STATE; -- Current ASM state
@@ -91,6 +91,8 @@ ARCHITECTURE behavioral OF CryptoCore IS
 
   -- Ace state register.
   SIGNAL ace_state : ACE_STATE_V; -- Whole state
+  SIGNAL ace_tag   : DOUBLE_WORD; -- Tag portion
+  SIGNAL ace_sr_hw : HALF_WORD;   -- bdi/bdo corresponding Sr half word
   SIGNAL ace_sr    : ACE_SR_V;    -- Sr portion
   SIGNAL ace_sc    : ACE_SC_V;    -- Sc portion
 
@@ -162,9 +164,15 @@ ARCHITECTURE behavioral OF CryptoCore IS
   -------------------------- bdi signals and aliases  --------------------------
   -- Data
   SIGNAL bdi_padd : HALF_WORD; -- padded bdi half word
-  SIGNAL bdi_buf  : HALF_WORD; -- previous passed bdi half word
-  SIGNAL bdi_lhw  : HALF_WORD; -- bdi low half word, padding-needs dependant
-  SIGNAL bdi_64_p : WORD;      -- padded bdi word
+  SIGNAL bdi_conc : HALF_WORD; -- concat bdi half word
+
+  SIGNAL bdi_buf      : HALF_WORD; -- previous passed padded bdi half word
+  SIGNAL bdi_conc_buf : HALF_WORD; -- previous passed concatenated bdi half word
+
+  SIGNAL bdi_lhw : HALF_WORD; -- bdi low half word, padding-needs dependant
+
+  SIGNAL bdi_64_p : WORD; -- padded bdi word
+  SIGNAL bdi_64_c : WORD; -- concatenated sr_bdi
 
   -- Control
   SIGNAL en_bdi_buf : STD_LOGIC; -- bdi half word buffer
@@ -244,7 +252,6 @@ ARCHITECTURE behavioral OF CryptoCore IS
   SIGNAL hash_s           : STD_LOGIC;
   SIGNAL n_empty_hash_s   : STD_LOGIC;
   SIGNAL empty_hash_s     : STD_LOGIC;
-  SIGNAL n_msg_auth_s     : STD_LOGIC;
   SIGNAL msg_auth_s       : STD_LOGIC;
   SIGNAL n_update_key_s   : STD_LOGIC;
   SIGNAL update_key_s     : STD_LOGIC;
@@ -277,14 +284,16 @@ BEGIN
   BEGIN
     IF rising_edge(clk) THEN
       IF (rst = '1') THEN
-        ace_state <= (OTHERS => '0');
-        bdi_buf   <= (OTHERS => '0');
+        ace_state    <= (OTHERS => '0');
+        bdi_buf      <= (OTHERS => '0');
+        bdi_conc_buf <= (OTHERS => '0');
       ELSE
         IF (ace_state_en = '1') THEN
           ace_state <= n_ace_state;
         END IF;
         IF (en_bdi_buf = '1') THEN
-          bdi_buf <= bdi_padd;
+          bdi_buf      <= bdi_padd;
+          bdi_conc_buf <= bdi_conc;
         END IF;
       END IF;
     END IF;
@@ -305,9 +314,6 @@ BEGIN
         empty_hash_s   <= '0';
         end_of_type_s  <= '0';
         end_of_input_s <= '0';
-
-        -- Reset output indicators
-        msg_auth_s <= '0';
       ELSE
         -- Set next state
         state <= n_state;
@@ -321,9 +327,6 @@ BEGIN
         end_of_input_s <= n_end_of_input_s;
         add_pad_word_s <= n_add_pad_word_s;
         prev_hw_full_s <= n_prev_hw_full_s;
-
-        -- Set next output indicators
-        msg_auth_s <= n_msg_auth_s;
       END IF;
     END IF;
   END PROCESS p_ctrl_regs;
@@ -648,7 +651,7 @@ BEGIN
     bdi_valid, bdi_ready_s, bdi_eoi, bdi_eot, bdi_valid_bytes_s, bdi_pad_loc_s,
     bdi_size, bdi_type, end_of_input_s, end_of_type_s,
     hash_in, hash_s, empty_hash_s, decrypt_in, decrypt_s,
-    bdo_ready, msg_auth_s,
+    bdo_ready, msg_auth_s, nt, ace_tag,
     half_word_cnt, ace_step_cnt, hash_sqz_cnt,
     add_pad_word_s, prev_hw_full_s)
   BEGIN
@@ -673,7 +676,7 @@ BEGIN
     end_of_block_s    <= '0';
     bdo_type_s        <= HDR_TAG;
     bdo_sel           <= BDO_SEL_TAG;
-    n_msg_auth_s      <= msg_auth_s;
+    msg_auth_s        <= '1';
     n_end_of_input_s  <= end_of_input_s;
     n_end_of_type_s   <= end_of_type_s;
     n_add_pad_word_s  <= add_pad_word_s;
@@ -685,7 +688,6 @@ BEGIN
 
     CASE state IS
       WHEN IDLE =>
-        n_msg_auth_s     <= '1';
         n_end_of_input_s <= '0';
         n_end_of_type_s  <= '0';
         n_add_pad_word_s <= '0';
@@ -1036,6 +1038,9 @@ BEGIN
 
       WHEN VERIFY_TAG =>
         msg_auth_valid_s <= '1';
+        IF (nt /= ace_tag) THEN
+          msg_auth_s <= '0';
+        END IF;
 
       WHEN OTHERS =>
         NULL;
@@ -1213,6 +1218,10 @@ BEGIN
   -- and the current 32-bits of padded bdi.
   bdi_64_p <= (bdi_buf & bdi_padd);
 
+  bdi_conc <= (bdi_lhw XOR ace_sr_hw) WHEN bdi_sel = '0' ELSE
+    repl_invalid(bdi, ace_sr_hw, bdi_valid_bytes_s, bdi_pad_loc_s);
+  bdi_64_c <= (bdi_conc_buf & bdi_conc);
+
   -- Loaded when tag is generated and then shifts
   -- out to bdo 32-bits at a time.
   tag_piso : ENTITY WORK.PISO_WSC(PISO_WSC_BEH)
@@ -1274,8 +1283,12 @@ BEGIN
     );
 
   -- Named portions of ACE state.
-  ace_sr <= sr_from_state(ace_state);
-  ace_sc <= sc_from_state(ace_state);
+  ace_tag <= tag_from_state(ace_state);
+  ace_sr  <= sr_from_state(ace_state);
+  ace_sc  <= sc_from_state(ace_state);
+
+  ace_sr_hw <= ace_sr(W_HW1_RANGE) WHEN (half_word_cnt >= BDIO_HALF_WORDS - 1) ELSE
+    ace_sr(W_HW0_RANGE);
 
   -- Named portions of ACE-step output
   ace_step_out_tag <= tag_from_state(ace_step_out);
@@ -1292,7 +1305,7 @@ BEGIN
   -- Construct/choose Sr portion of the next state
   WITH srn_sel SELECT
     n_ace_sr <= ace_step_out_sr WHEN SRN_SEL_SRO,
-    bdi_64_p WHEN SRN_SEL_BDI,
+    bdi_64_c WHEN SRN_SEL_BDI,
     sr_from_state(ld_hash_v) WHEN SRN_SEL_LD_HASH,
     sr_from_state(ld_aead_v) WHEN SRN_SEL_LD_AEAD,
     ace_step_out_sr XOR ACE_PAD_WORD WHEN SRN_SEL_SRO_PAD,

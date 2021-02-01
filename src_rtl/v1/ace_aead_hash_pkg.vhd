@@ -206,6 +206,8 @@ PACKAGE design_pkg IS
 
   --! Padding the current word.
   FUNCTION padd(bdi, bdi_valid_bytes, bdi_pad_loc : STD_LOGIC_VECTOR) RETURN STD_LOGIC_VECTOR;
+  --! Replace the invalid msg portion with corresponding portion from another vector.
+  FUNCTION repl_invalid(msg_v, msg_i, msg_valid_bytes, msg_pad_loc : STD_LOGIC_VECTOR) RETURN STD_LOGIC_VECTOR;
   --! Return max value
   FUNCTION max(a, b : INTEGER) RETURN INTEGER;
 
@@ -294,6 +296,26 @@ PACKAGE BODY design_pkg IS
         res(8 * (i + 1) - 1 DOWNTO 8 * i) := bdi(8 * (i + 1) - 1 DOWNTO 8 * i);
       ELSIF (bdi_pad_loc(i) = '1') THEN
         res(8 * (i + 1) - 1 DOWNTO 8 * i) := x"80";
+      END IF;
+    END LOOP;
+
+    RETURN res;
+  END FUNCTION;
+
+  --! Replace the invalid msg portion with corresponding portion from another vector. Includes XORed padding.
+  FUNCTION repl_invalid(msg_v, msg_i, msg_valid_bytes, msg_pad_loc : STD_LOGIC_VECTOR) RETURN STD_LOGIC_VECTOR IS
+    VARIABLE res                                                     : STD_LOGIC_VECTOR(msg_v'length - 1 DOWNTO 0);
+  BEGIN
+
+    FOR i IN 0 TO (msg_valid_bytes'length - 1) LOOP
+      IF (msg_valid_bytes(i) = '1') THEN
+        res(8 * (i + 1) - 1 DOWNTO 8 * i) := msg_v(8 * (i + 1) - 1 DOWNTO 8 * i);
+      ELSE
+        IF (msg_pad_loc(i) = '1') THEN
+          res(8 * (i + 1) - 1 DOWNTO 8 * i) := x"80" XOR msg_i(8 * (i + 1) - 1 DOWNTO 8 * i);
+        ELSE
+          res(8 * (i + 1) - 1 DOWNTO 8 * i) := msg_i(8 * (i + 1) - 1 DOWNTO 8 * i);
+        END IF;
       END IF;
     END LOOP;
 
